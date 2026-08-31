@@ -1318,6 +1318,14 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 
 	/* power down audio and chroma DAC+ADC */
 	cx_write(MO_AFECFG_IO, 0x12);
+	
+	// Enable I2S input and output
+	//cx_write(AUD_CTL, 0x8D46);
+	// Enable I2s in to DAC out
+	cx_write(AUD_CTL, 0xDD46);
+	cx_write(AUD_I2SCNTL, 0x1);
+	// Unmute I2S
+	cx_write(AUD_VOL_CTL, 0xF48);
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
