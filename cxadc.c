@@ -626,9 +626,20 @@ static int cxadc_char_open(struct inode *inode, struct file *file)
 	/* source select (see datasheet on how to change adc source) */
 	ctd->vmux &= 3;/* default vmux=1 */
 	/* pal-B */
-	cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(1<<13)|0x01|0x10|0x10000);
+	//cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(1<<13)|0x01|0x10|0x10000);
+	// DISABLE AGC entirely
+	cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(0<<13)|0x01|0x10|0x10000);
+	
+	// THIS DOES:
+	// Writes vmux to bits 14 and 15
+	// ENABLES AGC by 1<<13
+	// sets format to NTSC-M (0x01)
+	// sets decoder to Y/C video input (0x10), disabling notch filter
+	// selects chroma input for audio ADC (0x10000), no effect on CX25800
 
 	/* capture 16 bit or 8 bit raw samples */
+	// ENABLES CAP_RAW_ALL
+	// TENBIT enables "RAW16"
 	if (ctd->tenbit)
 		cx_write(MO_CAPTURE_CTRL, ((1<<6)|(3<<1)|(1<<5)));
 	else
@@ -641,7 +652,14 @@ static int cxadc_char_open(struct inode *inode, struct file *file)
 	if (ctd->level > 31)
 		ctd->level = 31;
 	/* control gain also bit 16 */
+	// THIS DOES:
+	// sets sixdb gain on or off
+	// disables AGC slice reference and VGA (variable gain amp) (22, 21)
+	// sets VGA counter to level (16)
+	// And the center offset parameter is actually applied HERE adding/subtracting the max accumulator value
+	// Accumulator min is set to 255, max to 0, forcing VGA to stay at initial level
 	cx_write(MO_AGC_GAIN_ADJ4, (ctd->sixdb<<23)|(0<<22)|(0<<21)|(ctd->level<<16)|(0xff<<8)|(0x0<<0));
+	//  
 	cx_write(MO_AGC_SYNC_TIP3, (0x1e48<<16)|(0xff<<8)|(ctd->center_offset));
 
 	if (ctd->tenxfsc < 10) {
@@ -990,6 +1008,7 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 	disable_card(ctd);
 
 	/* we use 16kbytes of FIFO buffer */
+	// CHANGE THIS
 	create_cdt_table(ctd, NUMBER_OF_CLUSTER_BUFFER, CLUSTER_BUFFER_SIZE,
 		CLUSTER_BUFFER_BASE, CDT_BASE);
 
@@ -1015,7 +1034,11 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 	/* source select (see datasheet on how to change adc source) */
 	ctd->vmux &= 3;/* default vmux=1 */
 	/* pal-B */
-	cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(1<<13)|0x01|0x10|0x10000);
+	
+	//cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(1<<13)|0x01|0x10|0x10000);
+	// DISABLE AGC entirely
+	cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(0<<13)|0x01|0x10|0x10000);
+	
 	cx_write(MO_OUTPUT_FORMAT, 0x0f); /* allow full range */
 
 	cx_write(MO_CONTR_BRIGHT, 0xff00);
@@ -1031,6 +1054,8 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 
 	/* raw mode & byte swap <<8 (3<<8=swap) */
 	cx_write(MO_COLOR_CTRL, ((0xe)|(0xe<<4)|(0<<8)));
+	// ALSO disable Gamma Correction and Error Diffusion
+	//cx_write(MO_COLOR_CTRL, ((1<<13)|(1<<12)|(0xe)|(0xe<<4)|(0<<8)));
 
 	/* capture 16 bit or 8 bit raw samples */
 	if (ctd->tenbit)
@@ -1039,7 +1064,9 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 		cx_write(MO_CAPTURE_CTRL, ((1<<6)|(3<<1)|(0<<5)));
 
 	/* power down audio and chroma DAC+ADC */
+	// POTENTIAL BUG: This write disables DAC, but does NOT disable chroma ADC, instead disabling ADC bandgap 
 	cx_write(MO_AFECFG_IO, 0x12);
+	//cx_write(MO_AFECFG_IO, 0x00);
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
@@ -1112,6 +1139,7 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 
 
 	/* set vbi agc */
+	// Sets sync sample delay for AGC to zero
 	cx_write(MO_AGC_SYNC_SLICER, 0x0);
 
 	if (ctd->level < 0)
@@ -1119,6 +1147,9 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 	if (ctd->level > 31)
 		ctd->level = 31;
 
+	// This sets desired back porch level for AGC to ZERO
+	// And also maxes "Maximum count for interval counter in min-max detect"
+	// I guess 
 	cx_write(MO_AGC_BACK_VBI, (0<<27)|(0<<26)|(1<<25)|(0x100<<16)|(0xfff<<0));
 	/* control gain also bit 16 */
 	cx_write(MO_AGC_GAIN_ADJ4, (ctd->sixdb<<23)|(0<<22)|(0<<21)|(ctd->level<<16)|(0xff<<8)|(0x0<<0));
@@ -1144,6 +1175,7 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 	}
 
 	/* i2c sda/scl set to high and use software control */
+	// do we really need this?
 	cx_write(MO_I2C, 3);
 
 	/* hook into linked list */
@@ -1293,7 +1325,9 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 	/* source select (see datasheet on how to change adc source) */
 	ctd->vmux &= 3;/* default vmux=1 */
 	/* pal-B */
-	cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(1<<13)|0x01|0x10|0x10000);
+	//cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(1<<13)|0x01|0x10|0x10000);
+	// DISABLE AGC entirely
+	cx_write(MO_INPUT_FORMAT, (ctd->vmux<<14)|(0<<13)|0x01|0x10|0x10000);
 	cx_write(MO_OUTPUT_FORMAT, 0x0f); /* allow full range */
 
 	cx_write(MO_CONTR_BRIGHT, 0xff00);
@@ -1317,15 +1351,20 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 		cx_write(MO_CAPTURE_CTRL, ((1<<6)|(3<<1)|(0<<5)));
 
 	/* power down audio and chroma DAC+ADC */
+	// POTENTIAL BUG: This write disables DAC, but does NOT disable chroma ADC, instead disabling ADC bandgap 
 	cx_write(MO_AFECFG_IO, 0x12);
+	//cx_write(MO_AFECFG_IO, 0x00);
 	
 	// Enable I2S input and output
 	//cx_write(AUD_CTL, 0x8D46);
-	// Enable I2s in to DAC out
-	cx_write(AUD_CTL, 0xDD46);
-	cx_write(AUD_I2SCNTL, 0x1);
+	// Enable I2s in straight to DAC out
+	//cx_write(AUD_CTL, 0xDD46);
+	//cx_write(AUD_I2SCNTL, 0x1);
+	// Set CX88 as master, set Phillips I2S (left-justified) format
+	//cx_write(AUD_I2SINPUTCNTL, 0x1);
 	// Unmute I2S
-	cx_write(AUD_VOL_CTL, 0xF48);
+	//cx_write(AUD_VOL_CTL, 0xF48);
+	
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
@@ -1374,6 +1413,7 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 	}
 
 	/* set vbi agc */
+	// This disables a whole bunch of AGC stuff
 	cx_write(MO_AGC_SYNC_SLICER, 0x0);
 
 	if (ctd->level < 0)
@@ -1381,16 +1421,24 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 	if (ctd->level > 31)
 		ctd->level = 31;
 
+	// disables clamp VBI
+	// disables vbi agc
+	// sets fixed back porch reference
 	cx_write(MO_AGC_BACK_VBI, (0<<27)|(0<<26)|(1<<25)|(0x100<<16)|(0xfff<<0));
 	/* control gain also bit 16 */
 	cx_write(MO_AGC_GAIN_ADJ4, (ctd->sixdb<<23)|(0<<22)|(0<<21)|(ctd->level<<16)|(0xff<<8)|(0x0<<0));
 	/* for 'cooked' composite */
+	// these are just default values
 	cx_write(MO_AGC_SYNC_TIP1, (0x1c0<<17)|(0x0<<9)|(0<<7)|(0xf<<0));
 	cx_write(MO_AGC_SYNC_TIP2, (0x20<<17)|(0x0<<9)|(0<<7)|(0xf<<0));
+	// this sets the AGC error accumulator max value to center_offset
 	cx_write(MO_AGC_SYNC_TIP3, (0x1e48<<16)|(0xff<<8)|(ctd->center_offset));
+	// default values
 	cx_write(MO_AGC_GAIN_ADJ1, (0xe0<<17)|(0xe<<9)|(0x0<<7)|(0x7<<0));
 	cx_write(MO_AGC_GAIN_ADJ2, (0x20<<17)|(2<<7)|0x0f);
 	/* set gain of agc but not offset */
+	// sets accumulator min and max to the same, lowers increment
+	// I guess the difference between accumulator min and max is the center offset?
 	cx_write(MO_AGC_GAIN_ADJ3, (0x28<<16)|(0x28<<8)|(0x50<<0));
 
 	if (ctd->audsel != -1) {
@@ -1405,6 +1453,7 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 	}
 
 	/* i2c sda/scl set to high and use software control */
+	// do we really need this?
 	cx_write(MO_I2C, 3);
 
 	ret = request_irq(ctd->irq, cxadc_irq, IRQF_SHARED, "cxadc", ctd);
