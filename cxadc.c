@@ -622,7 +622,10 @@ static int cxadc_char_open(struct inode *inode, struct file *file)
 
 	ctd->in_use = true;
 	mutex_unlock(&ctd->lock);
-
+	
+	// According to the datasheet, holding this register at 1 can be used to "disable audio entirely"
+	cx_write(AUD_SOFT_RESET, 0x1);
+	
 	/* source select (see datasheet on how to change adc source) */
 	ctd->vmux &= 3;/* default vmux=1 */
 	/* pal-B */
@@ -1066,8 +1069,9 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 	/* power down audio and chroma DAC+ADC */
 	// POTENTIAL BUG: This write disables DAC, but does NOT disable chroma ADC, instead disabling ADC bandgap 
 	//cx_write(MO_AFECFG_IO, 0x12);
-	// This actually poweres down DAC, chroma ADC, but leaves bandgap on
-	cx_write(MO_AFECFG_IO, 0x14);
+	// I tried disabling Chroma ADC but it wrecks the center offset for some reason. 
+	// This enables the bandgap voltage reference though which should be more stable
+	cx_write(MO_AFECFG_IO, 0x10);
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
@@ -1354,19 +1358,9 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 	/* power down audio and chroma DAC+ADC */
 	// POTENTIAL BUG: This write disables DAC, but does NOT disable chroma ADC, instead disabling ADC bandgap 
 	//cx_write(MO_AFECFG_IO, 0x12);
-	// This actually poweres down DAC, chroma ADC, but leaves bandgap on
-	cx_write(MO_AFECFG_IO, 0x14);
-	
-	// Enable I2S input and output
-	//cx_write(AUD_CTL, 0x8D46);
-	// Enable I2s in straight to DAC out
-	//cx_write(AUD_CTL, 0xDD46);
-	//cx_write(AUD_I2SCNTL, 0x1);
-	// Set CX88 as master, set Phillips I2S (left-justified) format
-	//cx_write(AUD_I2SINPUTCNTL, 0x1);
-	// Unmute I2S
-	//cx_write(AUD_VOL_CTL, 0xF48);
-	
+	// I tried disabling Chroma ADC but it wrecks the center offset for some reason. 
+	// This enables the bandgap voltage reference though which should be more stable
+	cx_write(MO_AFECFG_IO, 0x10);
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
