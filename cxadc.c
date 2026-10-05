@@ -623,8 +623,20 @@ static int cxadc_char_open(struct inode *inode, struct file *file)
 	ctd->in_use = true;
 	mutex_unlock(&ctd->lock);
 	
+	/* power down audio and chroma DAC+ADC */
+	// POTENTIAL BUG: This write disables DAC, but does NOT disable chroma ADC, instead disabling ADC bandgap 
+	//cx_write(MO_AFECFG_IO, 0x12);
+	// I tried disabling Chroma ADC but it wrecks the center offset for some reason. 
+	// This enables the bandgap voltage reference though which should be more stable
+	cx_write(MO_AFECFG_IO, 0x10);
+	
 	// According to the datasheet, holding this register at 1 can be used to "disable audio entirely"
 	cx_write(AUD_SOFT_RESET, 0x1);
+	
+	// disable the audio, MPEG and VIP subsystems globally
+	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+
 	
 	/* source select (see datasheet on how to change adc source) */
 	ctd->vmux &= 3;/* default vmux=1 */
@@ -1072,6 +1084,13 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 	// I tried disabling Chroma ADC but it wrecks the center offset for some reason. 
 	// This enables the bandgap voltage reference though which should be more stable
 	cx_write(MO_AFECFG_IO, 0x10);
+	
+	// According to the datasheet, holding this register at 1 can be used to "disable audio entirely"
+	cx_write(AUD_SOFT_RESET, 0x1);
+
+	// disable the audio, MPEG and VIP subsystems globally
+	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
@@ -1361,6 +1380,14 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 	// I tried disabling Chroma ADC but it wrecks the center offset for some reason. 
 	// This enables the bandgap voltage reference though which should be more stable
 	cx_write(MO_AFECFG_IO, 0x10);
+	
+	// According to the datasheet, holding this register at 1 can be used to "disable audio entirely"
+	cx_write(AUD_SOFT_RESET, 0x1);
+	
+	// disable the audio, MPEG and VIP subsystems globally
+	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
