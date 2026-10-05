@@ -631,12 +631,12 @@ static int cxadc_char_open(struct inode *inode, struct file *file)
 	cx_write(MO_AFECFG_IO, 0x10);
 	
 	// According to the datasheet, holding this register at 1 can be used to "disable audio entirely"
-	cx_write(AUD_SOFT_RESET, 0x1);
+	//cx_write(AUD_SOFT_RESET, 0x1);
 	
 	// disable the audio, MPEG and VIP subsystems globally
-	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
-	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
-
+	// 0x111F1930
+	//cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+	//cx_write(F2_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
 	
 	/* source select (see datasheet on how to change adc source) */
 	ctd->vmux &= 3;/* default vmux=1 */
@@ -1045,7 +1045,7 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 	cx_write(CHN24_CMDS_BASE+12, RISC_INST_QUEUE);
 
 	cx_write(CHN24_CMDS_BASE+16, 0x40);
-
+	
 	/* source select (see datasheet on how to change adc source) */
 	ctd->vmux &= 3;/* default vmux=1 */
 	/* pal-B */
@@ -1086,16 +1086,24 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 	cx_write(MO_AFECFG_IO, 0x10);
 	
 	// According to the datasheet, holding this register at 1 can be used to "disable audio entirely"
-	cx_write(AUD_SOFT_RESET, 0x1);
+	//cx_write(AUD_SOFT_RESET, 0x1);
 
 	// disable the audio, MPEG and VIP subsystems globally
-	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
-	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+// 	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+// 	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+	
+	// Place unused PCI functions in "d3hot" low power state
+	// Datasheet says this does things like disabling clocks for audio
+	cx_write(0x2F0150, 3); //Audio
+	cx_write(0x2F0250, 3); //MPEG TS
+	cx_write(0x2F0350, 3); //VIP
+	cx_write(0x2F0450, 3); //General Purpose Host Port
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
 	/* enable fifo and risc */
 	cx_write(MO_VID_DMACNTRL, ((1<<7)|(1<<3)));
+
 
 	rc = request_irq(ctd->irq, cxadc_irq, IRQF_SHARED, "cxadc", ctd);
 	if (rc < 0) {
@@ -1382,11 +1390,18 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 	cx_write(MO_AFECFG_IO, 0x10);
 	
 	// According to the datasheet, holding this register at 1 can be used to "disable audio entirely"
-	cx_write(AUD_SOFT_RESET, 0x1);
+	//cx_write(AUD_SOFT_RESET, 0x1);
 	
 	// disable the audio, MPEG and VIP subsystems globally
-	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
-	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+// 	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+// 	cx_write(F1_DEV_CNTRL1_MM, (1<<28)|(0<<27)|(0<<26)|(0<<25)|(1<<24)|(0x7F<<11)|(0<<10)|(0<<9)|(1<<8)|(3<<4));
+
+	// Place unused PCI functions in "d3hot" low power state
+	// Datasheet says this does things like disabling clocks for audio
+	cx_write(0x2F0150, 3); //Audio
+	cx_write(0x2F0250, 3); //MPEG TS
+	cx_write(0x2F0350, 3); //VIP
+	cx_write(0x2F0450, 3); //General Purpose Host Port
 
 
 	/* run risc */
