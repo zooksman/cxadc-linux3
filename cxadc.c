@@ -1065,8 +1065,9 @@ static int cxadc_probe(struct pci_dev *pci_dev,
 
 	/* power down audio and chroma DAC+ADC */
 	// POTENTIAL BUG: This write disables DAC, but does NOT disable chroma ADC, instead disabling ADC bandgap 
-	cx_write(MO_AFECFG_IO, 0x12);
-	//cx_write(MO_AFECFG_IO, 0x00);
+	//cx_write(MO_AFECFG_IO, 0x12);
+	// This actually poweres down DAC, chroma ADC, but leaves bandgap on
+	cx_write(MO_AFECFG_IO, 0x14);
 
 	/* run risc */
 	cx_write(MO_DEV_CNTRL2, 1<<5);
@@ -1352,8 +1353,9 @@ static int cxadc_resume(struct pci_dev *pci_dev)
 
 	/* power down audio and chroma DAC+ADC */
 	// POTENTIAL BUG: This write disables DAC, but does NOT disable chroma ADC, instead disabling ADC bandgap 
-	cx_write(MO_AFECFG_IO, 0x12);
-	//cx_write(MO_AFECFG_IO, 0x00);
+	//cx_write(MO_AFECFG_IO, 0x12);
+	// This actually poweres down DAC, chroma ADC, but leaves bandgap on
+	cx_write(MO_AFECFG_IO, 0x14);
 	
 	// Enable I2S input and output
 	//cx_write(AUD_CTL, 0x8D46);
